@@ -28,7 +28,8 @@ mongoose.set('useCreateIndex', true);
 
 const userSchema = new mongoose.Schema({
     email: String,
-    password: String
+    password: String, 
+    secret: String
 });
 
 userSchema.plugin(passportlocalMongoose);
@@ -45,6 +46,24 @@ passport.deserializeUser(User.deserializeUser());
 app.get('/', (req, res) => {
     res.render('home');
 });
+
+app.get('/secrets', (req, res) => {
+    if(req.isAuthenticated()){
+        User.find({"secret": {$ne: null}}, (error, usersFound) => {
+            if(error){
+                console.log(error);
+            } else {
+                console.log(req.user);
+                res.render('secrets', {usersSecrets: usersFound});
+            }
+        });       
+    } else {
+        res.redirect('/login');
+    }
+});
+
+
+
 
 app.get('/register', (req, res) => {
     res.render('register');
@@ -64,32 +83,56 @@ app.post('/register', (req, res) => {
 
 });
 
+app.get('/submit', (req, res) => {
+    if(req.isAuthenticated()){
+        res.render('submit');
+    }else {
+        res.redirect('/login');
+    }
+});
+
+app.post('/submit', (req, res) => {
+    const submittedSecret = req.body.secret;
+
+    User.findById(req.user.id, (error, userFound)=>{
+        if(error){
+            console.log(error);
+        } else {
+            userFound.secret = submittedSecret;
+            userFound.save(()=>{
+                res.redirect('/secrets');
+            });
+        }
+    })
+
+});
 
 app.get('/login', (req, res) => {
     res.render('login');
 });
 
 app.post('/login', (req, res) => {
-    const userName = req.body.username;
-    const password = md5(req.body.password);
+    const user = new User({
+        username: req.body.username,
+        password: req.body.password
+    });
 
-    User.findOne({
-        email: userName,
-        password: password
-    }, (error, userFound)=>{
+    req.login(user, (error) => {
         if(error){
             console.log(error);
-        } else{
-            if(userFound){
-                res.render('secrets');
-            } else {
-                res.render('login');
-            }
+        } else {
+            passport.authenticate("local")(req, res, ()=>{
+                res.redirect('/secrets');
+            });
         }
     });
 
 });
 
+app.get('/logout', (req, res) => {
+    req.logout();
+    res.redirect('/');
+});
 
 app.listen(3000, () =>{
     console.log('Server is running on port 3000');
